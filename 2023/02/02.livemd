@@ -1,0 +1,48 @@
+# 02
+
+```elixir
+Mix.install([
+  {:kino, "~> 0.11.3"}
+])
+```
+
+## Section
+
+```elixir
+input = Kino.Input.textarea("problem input")
+```
+
+```elixir
+get_color_count_from_set = fn set ->
+  set
+  |> Enum.reduce(%{}, fn [count, color] ->
+    case Map.fetch(color) do
+      {:ok, curr_count} -> acc[color] = max(curr_count, String.to_integer(count))
+      _ -> acc[color] = String.to_integer(count)
+    end
+  end)
+end
+
+get_max_from_sets = fn sets ->
+  sets
+  |> Enum.map(fn x -> String.split(x, " ", trim: true) end)
+  |> Enum.map(fn x -> Enum.map(x, fn y -> String.trim(y, ",") end) end)
+  |> Enum.map(fn x -> Enum.chunk_every(x, 2) end)
+  |> Enum.map(get_color_count_from_set)
+
+  # |> Enum.reduce(acc, fn([count, color]) ->
+  #   case Map.fetch(color) do
+  #     {:ok, curr_count} -> acc[color] = max(curr_count,)
+  #   end
+  # end)
+end
+
+data =
+  Kino.Input.read(input)
+  |> String.split("\n", trim: true)
+  |> Enum.map(fn x -> String.split(x, ":") end)
+  |> Enum.map(fn [game, sets] -> [String.split(game, " "), sets] end)
+  |> Enum.map(fn [[_, id], sets] -> [String.to_integer(id), sets] end)
+  |> Enum.map(fn [id, sets] -> [id, String.split(sets, ";")] end)
+  |> Enum.map(fn [id, sets] -> [id, get_max_from_sets.(sets)] end)
+```
