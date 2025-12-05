@@ -8,7 +8,7 @@ fn _part1() {
         .trim()
         .lines()
         .map(|range_str| {
-            let split = range_str.split("-").collect::<Vec<_>>();
+            let split = range_str.split('-').collect::<Vec<_>>();
             let start = split[0].parse::<i64>().unwrap();
             let end = split[1].parse::<i64>().unwrap();
             start..=end
@@ -25,11 +25,11 @@ fn _part1() {
 
     let mut fresh_count = 0;
 
-    item_ids.iter().for_each(|id| {
+    for id in &item_ids {
         if fresh_ranges.iter().any(|range| range.contains(id)) {
             fresh_count += 1;
         };
-    });
+    }
 
     println!("{fresh_count:?}");
 }
@@ -42,7 +42,7 @@ fn _part2() {
         .trim()
         .lines()
         .map(|range_str| {
-            let split = range_str.split("-").collect::<Vec<_>>();
+            let split = range_str.split('-').collect::<Vec<_>>();
             let start = split[0].parse::<i64>().unwrap();
             let end = split[1].parse::<i64>().unwrap();
             (start, end)
@@ -78,7 +78,7 @@ fn _part2() {
     let mut last = (0, 0);
     for range in combined_ranges.clone() {
         assert!(range.0 > last.1);
-        last = range
+        last = range;
     }
     println!("validated");
 
