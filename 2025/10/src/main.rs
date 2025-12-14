@@ -1,31 +1,34 @@
+use cached::proc_macro::cached;
+use rayon::{current_num_threads, current_thread_index, prelude::*};
 use std::collections::{HashSet, VecDeque};
+use std::time::Instant;
 
 use std::fs;
 
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 struct LightState {
-    state: String,
+    voltage: Vec<i32>,
 }
 
 impl LightState {
-    fn from_string(str: &str) -> LightState {
-        let sub_str = &str[1..str.len()];
+    fn from_string(voltage_str: &str) -> LightState {
+        let volt_sub_str = &voltage_str[1..voltage_str.len() - 1];
+        let volt_vec = volt_sub_str
+            .split(",")
+            .map(|char| char.parse::<i32>().unwrap())
+            .collect::<Vec<_>>();
 
-        LightState {
-            state: sub_str.chars().collect(),
-        }
+        LightState { voltage: volt_vec }
     }
 
     fn find_next_state(&self, button: &Button) -> LightState {
-        let mut state = self.state.clone();
-        button.indices.iter().for_each(|idx| {
-            let current_value = state.chars().nth(*idx).unwrap();
-            let replacement_val = if current_value == '.' { '#' } else { '.' };
-            state.replace_range(idx..&(idx + 1), &replacement_val.to_string());
-        });
-        LightState { state }
+        let mut voltage = self.voltage.clone();
+        button.indices.iter().for_each(|idx| voltage[*idx] -= 1);
+        LightState { voltage }
     }
 }
 
+#[derive(Hash, Eq, PartialEq, Debug, Clone)]
 struct Button {
     indices: Vec<usize>,
 }
@@ -42,64 +45,69 @@ impl Button {
     }
 }
 
-fn _part1() {
-    let contents = fs::read_to_string("input.txt").unwrap();
+fn _part2() {
+    let contents = fs::read_to_string("test.txt").unwrap();
     let parsed_data = contents
         .trim()
         .lines()
         .map(|line| {
             let mut split = line.split(" ").collect::<VecDeque<_>>();
-            let desired_end_state = split.pop_front().unwrap();
-            let _voltages = split.pop_back().unwrap();
+            let _desired_end_state = split.pop_front().unwrap();
+            let voltages = split.pop_back().unwrap();
             let buttons = split
                 .iter()
                 .map(|x| Button::from_string(x))
                 .collect::<Vec<_>>();
 
-            (LightState::from_string(desired_end_state), buttons)
+            (LightState::from_string(voltages), buttons)
         })
         .collect::<Vec<_>>();
 
-    let mut result = 0;
-    parsed_data.iter().for_each(|(light_state, buttons)| {
-        result += find_min_button_presses(light_state, buttons);
-    });
+    println!("{}", current_num_threads());
+    let total = parsed_data.len();
+    let result: i64 = parsed_data
+        .par_iter()
+        .enumerate()
+        .map(|(idx, (light_state, buttons))| {
+            // let cur_thread = current_thread_index().unwrap();
+            let cur_thread = 0;
+            println!("{}/{} started on thread {}", idx, total, cur_thread);
+
+            let now = Instant::now();
+            let res = find_min_button_presses(light_state, buttons).unwrap();
+            println!(
+                "{}/{} on thread {:?}, took: {:?}",
+                idx,
+                total,
+                cur_thread,
+                now.elapsed()
+            );
+
+            res
+        })
+        .sum();
 
     println!("result: {result}");
 }
 
-fn find_min_button_presses(end_light_state: &LightState, buttons: &[Button]) -> i64 {
-    let initial_state = LightState {
-        state: end_light_state.state.clone().replace("#", "."),
-    };
-    let mut processing_queue = VecDeque::from(vec![(0, initial_state)]);
-    let mut visited = HashSet::new();
-
-    let mut result = 0;
-    while !processing_queue.is_empty() {
-        let (step, cur_state) = processing_queue.pop_front().unwrap();
-        println!("{step}");
-        if cur_state.state == end_light_state.state {
-            result = step;
-            break;
-        }
-        if visited.contains(&cur_state.state) {
-            continue;
-        }
-        visited.insert(cur_state.state.clone());
-
-        let mut next_states = buttons
-            .iter()
-            .map(|button| (step + 1, cur_state.find_next_state(button)))
-            .collect::<VecDeque<_>>();
-        processing_queue.append(&mut next_states);
+#[cached(key = "String", convert = r#"{ format!("{:?}", end_light_state) }"#)]
+fn find_min_button_presses(end_light_state: &LightState, buttons: &[Button]) -> Option<i64> {
+    println!("{end_light_state:?}");
+    if end_light_state.voltage.iter().all(|voltage| *voltage == 0) {
+        return Some(0);
+    }
+    if end_light_state.voltage.iter().any(|voltage| *voltage < 0) {
+        return None;
     }
 
-    result
+    buttons
+        .iter()
+        .map(|button| find_min_button_presses(&end_light_state.find_next_state(button), buttons))
+        .filter_map(|opt| opt)
+        .map(|steps| steps + 1)
+        .min()
 }
 
-fn _part2() {}
-
 fn main() {
-    _part1();
+    _part2();
 }
