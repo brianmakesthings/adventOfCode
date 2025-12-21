@@ -6,3 +6,5 @@ edition = "2021"
 [dependencies]
 cached = "0.56.0"
 rayon = "1.11.0"
+reqwest = "0.12.25"
+z3 = { version = "0.19.6", features = ["gh-release"] }

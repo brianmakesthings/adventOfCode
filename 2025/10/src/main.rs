@@ -1,7 +1,8 @@
-use cached::proc_macro::cached;
-use rayon::{current_num_threads, current_thread_index, prelude::*};
-use std::collections::{HashSet, VecDeque};
+use rayon::{current_num_threads, prelude::*};
+use std::collections::VecDeque;
 use std::time::Instant;
+use z3::ast::Int;
+use z3::Optimize;
 
 use std::fs;
 
@@ -19,12 +20,6 @@ impl LightState {
             .collect::<Vec<_>>();
 
         LightState { voltage: volt_vec }
-    }
-
-    fn find_next_state(&self, button: &Button) -> LightState {
-        let mut voltage = self.voltage.clone();
-        button.indices.iter().for_each(|idx| voltage[*idx] -= 1);
-        LightState { voltage }
     }
 }
 
@@ -46,7 +41,7 @@ impl Button {
 }
 
 fn _part2() {
-    let contents = fs::read_to_string("test.txt").unwrap();
+    let contents = fs::read_to_string("input.txt").unwrap();
     let parsed_data = contents
         .trim()
         .lines()
@@ -90,22 +85,56 @@ fn _part2() {
     println!("result: {result}");
 }
 
-#[cached(key = "String", convert = r#"{ format!("{:?}", end_light_state) }"#)]
 fn find_min_button_presses(end_light_state: &LightState, buttons: &[Button]) -> Option<i64> {
-    println!("{end_light_state:?}");
-    if end_light_state.voltage.iter().all(|voltage| *voltage == 0) {
-        return Some(0);
-    }
-    if end_light_state.voltage.iter().any(|voltage| *voltage < 0) {
-        return None;
+    let optimizer = Optimize::new();
+    let switches: Vec<Int> = buttons
+        .iter()
+        .enumerate()
+        .map(|(idx, _button)| Int::fresh_const(&idx.to_string()))
+        .collect();
+
+    for switch in &switches {
+        optimizer.assert(&switch.ge(0));
     }
 
-    buttons
+    end_light_state
+        .voltage
         .iter()
-        .map(|button| find_min_button_presses(&end_light_state.find_next_state(button), buttons))
-        .filter_map(|opt| opt)
-        .map(|steps| steps + 1)
-        .min()
+        .enumerate()
+        .for_each(|(volt_idx, volt_num)| {
+            optimizer.assert(
+                &buttons
+                    .iter()
+                    .enumerate()
+                    .filter(|(_btn_and_var_idx, button)| button.indices.contains(&volt_idx))
+                    .map(|(btn_and_var_idx, _button)| switches[btn_and_var_idx].clone())
+                    .reduce(|a, b| a + b)
+                    .unwrap()
+                    .eq(*volt_num),
+            );
+        });
+    for (volt_idx, &volt_num) in end_light_state.voltage.iter().enumerate() {
+        let sum = &buttons
+            .iter()
+            .enumerate()
+            .filter(|(_btn_and_var_idx, button)| button.indices.contains(&volt_idx))
+            .map(|(btn_and_var_idx, _button)| switches[btn_and_var_idx].clone())
+            .reduce(|a, b| a + b)?;
+
+        optimizer.assert(&sum.eq(volt_num))
+    }
+
+    let total = switches.iter().map(|x| x.clone()).reduce(|a, b| a + b)?;
+
+    optimizer.minimize(&total);
+    optimizer.check(&[]);
+    let model = optimizer.get_model()?;
+    let result = switches
+        .iter()
+        .map(|switch| model.eval(switch, true)?.as_i64())
+        .sum::<Option<i64>>()?;
+    println!("{result:?}");
+    Some(result)
 }
 
 fn main() {
